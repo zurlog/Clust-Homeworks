@@ -3,9 +3,13 @@ Weekly Assignments on Clustering Methods and Related Tools.
 
 Topics:
 ‣ K-Means
+
 ‣ Gap Statistic (Tibshirani et al. (2001))
+
 ‣ Dissimilarities
+
 ‣ Multidimensional Scaling (MDS)
+
 ‣ Clustering Similarity Measures
 ‣ Hierarchical Clustering
 ‣ PAM
