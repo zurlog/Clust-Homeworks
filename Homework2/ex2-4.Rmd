@@ -1,0 +1,309 @@
+---
+title: "Exercises 2-4"
+author: "Giovanni Zurlo"
+date: "12/10/2021"
+output: html_document
+---
+
+## **Exercise 1**
+> **1.** *Use the gap statistic method to estimate the number of clusters for the olive oil   data, and for Artificial Dataset2. Comment on the solutions.* 
+  **2.** *Generate a dataset from a two-dimensional uniform distribution on the rectangle [min x1; max x1] x [min x2; max x2], where x1; x2 are the values of the first and second variable of Artificial Dataset2. Compute K-means clusterings for K from 1 to 10 and show at least three scatterplots of the dataset with clusterings with different K. Compare the values of log Sk from clustering Artificial Dataset2 with those from clustering the uniformly distributed dataset*
+
+#### **Olive Oil Data**
+
+```{r soliveGap, message=FALSE, warning=FALSE, fig.align='center',cache=TRUE}
+# Loading and standardizing oliveoil data
+library(pdfCluster)
+data("oliveoil")
+diag(var(oliveoil))
+solive=scale(oliveoil[,3:10])
+
+library(cluster)
+set.seed(1234)
+cg.solive=clusGap(solive,kmeans, K.max=10, B=150, d.power=2,
+                  spaceH0 = 'scaledPCA', nstart=100, iter.max=100)
+plot(cg.solive, main="Gap Statistic Plot for std Oliveoil Data")
+# Extracting the best K according to different criteria
+maxSE(cg.solive$Tab[,3],cg.solive$Tab[,4],"globalSEmax",SE.factor=2)
+maxSE(cg.solive$Tab[,3],cg.solive$Tab[,4],"firstSEmax",SE.factor=2)
+maxSE(cg.solive$Tab[,3],cg.solive$Tab[,4],"Tibs2001SEmax",SE.factor=3)
+```
+
+The gap statistic plot shows the elbow at *k=5*, however the index grows monotonically up to *k=10*. Both the "globalSEmax" and "firstSEmax" criterions suggest choosing *k=9* clusters, for which solution we saw a clear correspondence with the 'region' covariate.
+The only criterion suggesting the elbow value *k=5* is "Tibs2001SEmax" with 3 as standard error factor. I would choose between *k=5* or *9* depending on the different usage of these results, maybe *5* leads to insights on the data that are more catching and concise.
+
+ㅤ
+
+#### **Artificial Dataset 2**
+```{r artdata2, message=FALSE, warning=FALSE,fig.align='center',cache=TRUE}
+# Loading and standardizing the Artificial Dataset 2
+artdata=read.table(file.choose())
+sartdata=scale(artdata)
+library(cluster)
+set.seed(1234)
+cg.sart=clusGap(sartdata,kmeans, K.max=10, B=130, d.power=2,
+                  spaceH0 = 'scaledPCA', nstart=100, iter.max=100)
+plot(cg.sart, main="Gap Statistic Plot for std Artificial Data 2")
+
+# Extracting the best K according to different criteria
+maxSE(cg.sart$Tab[,3],cg.sart$Tab[,4],"globalSEmax",SE.factor=2)
+maxSE(cg.sart$Tab[,3],cg.sart$Tab[,4],"firstSEmax",SE.factor=2)
+maxSE(cg.sart$Tab[,3],cg.sart$Tab[,4],"Tibs2001SEmax",SE.factor=1)
+```
+
+The gap statistic plot shows a local maximum at *k=3*, which we know to be the most natural choice (based on the data generating process). "GlobalSEmax" suggests *9* as the optimal number of groups, but both "Tibs2001SEmax" and "firstSEmax" point towards the local maximum of the graph *k=3*, which seems the most reasonable value.
+
+ㅤ
+
+
+#### **Comparison with a uniform distribution**
+```{r runif, message=FALSE, warning=FALSE, fig.align='center', cache=TRUE}
+set.seed(1234)
+# Generating a dataset from a two-dimensional uniform distribution
+U1=runif(140, max = max(artdata$V1),min = min(artdata$V1))
+U2=runif(140, max = max(artdata$V2),min = min(artdata$V2))
+U=data.frame(U1,U2)
+
+# Collecting the outputs of the k-means function in a list, from 1 to K.max
+km.out=list()
+set.seed(1234)
+for (i in 1:10) {km.out[[i]]=kmeans(U,iter.max = 100,nstart =100, centers = i)}
+
+# Three scatterplots of the uniform data with different K
+plot(U,col=(km.out[[2]]$cluster+2),cex=1.2,pch=0,lwd=2,
+     main='Uniform Data Clustering,  K=2')
+plot(U,col=(km.out[[4]]$cluster),cex=1.4,pch=0,lwd=2,
+     main='Uniform Data Clustering,  K=4')
+plot(U,col=(km.out[[6]]$cluster+2),cex=1.2,pch=0,lwd=2,
+     main='Uniform Data Clustering,  K=6')
+```
+
+```{r comparison, message=FALSE, warning=FALSE,fig.align='center',cache=TRUE}
+# Extracting log(Sk) from the list
+U.logSk=rep(NA,10)
+for (i in 1:10) {U.logSk[i]=log(km.out[[i]]$tot.withinss)}
+
+# Extracting log(Sk) for the Artificial Dataset 2 output
+set.seed(1234)
+cg.sart=clusGap(artdata,kmeans, K.max=10, B=300, d.power=2,
+                spaceH0 = 'scaledPCA', nstart=100, iter.max=100)
+AD2.logSk=cg.sart$Tab[,1]
+
+# Plotting the two sequences of indexes 
+plot(1:10,U.logSk,type='l',col='grey',lty=2,lwd=2,ylim=c(min(AD2.logSk),11),
+     ylab='log S_k', main='Artificial Data2 log(Sk) vs. Uniform log(Sk)', xlab='K')
+lines(1:10,AD2.logSk,lwd=2)
+legend(7,11,legend=c('log(Sk) ArtData2','log(SK) Uniform'), lty=1:2,lwd=3,col=c(1,'grey'))
+
+```
+
+What I'm doing here is kind of visualizing and reproducing the idea behind the gap statistic (previously computed). By means of the last plot I can compare the reduction in the logarithm of the objective function with how it is expected to behave under uniform distribution on the same "domain", for which k-means is applied in the same way. Now we can also see graphically that the gap between the two curves increases with the number of clusters, and at *k=3* this gap significantly widens. 
+
+***
+ㅤ
+
+## **Exercise 2**
+> *Using the gapnc-function, generate 100 data sets according to the specifications for Artificial Data Set 1, estimate the number of clusters by all four possible ways to run clusGap and compile four different vectors with all 100 estimated numbers of clusters for each version of clusGap. At the end look at the four distributions of estimated numbers of clusters using a suitable graphical display and comment on them. Are there better or worse results for some of the clusGap-versions? Do the same thing with another model generating data*
+
+```{r function, include=FALSE}
+require(cluster)
+
+gapnc <- function(data,FUNcluster=kmeans,
+                  K.max=10, B = 100, d.power = 2,
+                  spaceH0 ="scaledPCA",
+                  method ="globalSEmax", SE.factor = 2,...){
+  # As in original clusGap function the ... arguments are passed on
+  # to the clustering method FUNcluster (kmeans).
+  # Run clusGap
+  gap1 <- clusGap(data,kmeans,K.max, B, d.power,spaceH0,...)
+  # Find optimal number of clusters; note that the method for
+  # finding the optimum and the SE.factor q need to be specified here.
+  nc <- maxSE(gap1$Tab[,3],gap1$Tab[,4],method, SE.factor)
+  # Re-run kmeans with optimal nc.
+  kmopt <- kmeans(data,nc,...)
+  out <- list()
+  out$gapout <- gap1
+  out$nc <- nc
+  out$kmopt <- kmopt
+  out
+}
+
+library(parallel)
+```
+
+
+```{r cacheshow, message=FALSE, warning=FALSE, cache=TRUE}
+# Generating 100 sets according to the specifications for Artificial DataSet 1 
+data=list()
+simruns=100
+kmax=10
+library(sn)
+set.seed(123)
+for (i in 1:simruns) {
+  v1 <- c(rnorm(50,0,1), rsn(70,5,1,8), rnorm(30,6,1))
+  v2 <- c(rnorm(50,0,1), rsn(70,0,1,8), 8+rt(30,5))
+  data[[i]] <- cbind(v1,v2)
+}
+
+out.orig1=list()
+set.seed(1)
+for (i in 1:100) {
+  out.orig1[[i]]=gapnc(data[[i]], K.max = kmax ,spaceH0='original',SE.factor=1,
+                       iter.max=100, nstart=3)}
+
+## The same FOR loop will be run with different values of 'spaceH0' and 'SE.factor'
+```
+100 Datasets were generated and stored in a list. The gapnc function is run on each of them (simulating B=100 samples from a uniform distribution) and results are collected in a list; this is performed for each combination of the *spaceH0* and *SE.factor* parameters. Parts of code which are repeated are not shown for the sake of simplicity.
+
+```{r cache, message=FALSE, warning=FALSE, cache=TRUE, include=FALSE}
+out.orig2=list()
+set.seed(2)
+for (i in 1:100) {
+  out.orig2[[i]]=gapnc(data[[i]],K.max = kmax,spaceH0='original',SE.factor=2,
+                       iter.max=100, nstart=3)}
+
+out.pca1=list()
+set.seed(3)
+for (i in 1:100) {
+  out.pca1[[i]]=gapnc(data[[i]],K.max = kmax, spaceH0='scaledPCA',SE.factor=1,
+                      iter.max=100, nstart=3)}
+
+out.pca2=list()
+set.seed(4)
+for (i in 1:100) {
+  out.pca2[[i]]=gapnc(data[[i]],K.max = kmax,spaceH0='scaledPCA',SE.factor=2,
+                      iter.max=100, nstart=3)}
+```
+
+```{r clusvecto, cache=TRUE}
+# Compile 4 different vectors with all 100 est numbers of clusters for each clusGap run
+clu.orig1=rep(NA,simruns)
+for (i in 1:simruns) {clu.orig1[i]=out.orig1[[i]]$nc}
+
+clu.orig2=rep(NA,simruns)
+for (i in 1:simruns) {clu.orig2[i]=out.orig2[[i]]$nc}
+
+clu.pca1=rep(NA,simruns)
+for (i in 1:simruns) {clu.pca1[i]=out.pca1[[i]]$nc}
+
+clu.pca2=rep(NA,simruns)
+for (i in 1:simruns) {clu.pca2[i]=out.pca2[[i]]$nc}
+```
+I then extracted the optimal number of clusters for each simulated dataset and each variant of the clusGap function, obtaining 4 vectors of lenght 100. These have been represented by means of a heatmap in which orange bars represent deviations from the "correct" number of groups. As you can see, methods based on the rotation of principal axes perform slightly worse than those which keep the original space of the sample, but these findings cannot be generalized. Results are also tabulated under here in 2-by-2 tables. 
+
+```{r heat, echo=FALSE, fig.align='center'}
+sim.matrix=rbind(clu.orig1,clu.orig2,clu.pca1,clu.pca2)
+par(mar=c(5,5,5,5))
+heatmap(sim.matrix, Rowv = NA, Colv = NA, scale = "column",main="K0 for every generated sample",
+        col=c('cornsilk2','chocolate2'),cexRow=1, margins = c(10,10),
+        labRow=c('Original, 1 SE','Original, 2 SE','PCA, 1 SE', 'PCA, 2 SE'))
+
+library(knitr)
+library(kableExtra)
+table(clu.orig1,clu.orig2) %>%
+  kable("html", caption = 'spaceH0=Original', row.names = T) %>%
+    kable_styling(full_width = F, position = "float_left")
+ 
+table(clu.pca1,clu.pca2) %>%
+  kable("html", caption = 'spaceH0=PCA', row.names = T) %>%
+    kable_styling(full_width = F, position = "center")
+
+```
+
+ㅤ
+
+#### **Artificial Dataset 2**
+```{r message=FALSE, warning=FALSE, include=FALSE, cache=TRUE}
+data2=list()
+set.seed(1234)
+for (i in 1:simruns) {
+x1 <- rnorm(20)
+y1 <- rnorm(20)
+x2 <- rnorm(20,mean=10)
+y2 <- rnorm(20)
+x3 <- runif(100,-20,30)
+y3 <- runif(100,20,40)
+data2[[i]] <- cbind(c(x1,x2,x3),c(y1,y2,y3))}
+
+out_orig1=list()
+set.seed(1)
+for (i in 1:100) {
+  out_orig1[[i]]=gapnc(data2[[i]], K.max = kmax ,spaceH0='original',SE.factor=1,
+                       iter.max=100, nstart=10)}
+
+out_orig2=list()
+set.seed(2)
+for (i in 1:100) {
+  out_orig2[[i]]=gapnc(data2[[i]],K.max = kmax,spaceH0='original',SE.factor=2,
+                       iter.max=100, nstart=10)}
+
+out_pca1=list()
+set.seed(3)
+for (i in 1:100) {
+  out_pca1[[i]]=gapnc(data2[[i]],K.max = kmax, spaceH0='scaledPCA',SE.factor=1,
+                      iter.max=100, nstart=10)}
+
+out_pca2=list()
+set.seed(4)
+for (i in 1:100) {
+  out_pca2[[i]]=gapnc(data2[[i]],K.max = kmax,spaceH0='scaledPCA',SE.factor=2,
+                      iter.max=100, nstart=10)}
+
+clu_orig1=rep(NA,simruns)
+for (i in 1:simruns) {clu_orig1[i]=out_orig1[[i]]$nc}
+
+clu_orig2=rep(NA,simruns)
+for (i in 1:simruns) {clu_orig2[i]=out_orig2[[i]]$nc}
+
+clu_pca1=rep(NA,simruns)
+for (i in 1:simruns) {clu_pca1[i]=out_pca1[[i]]$nc}
+
+clu_pca2=rep(NA,simruns)
+for (i in 1:simruns) {clu_pca2[i]=out_pca2[[i]]$nc}
+
+```
+
+```{r final, echo=FALSE, message=FALSE, warning=FALSE,fig.align='center'}
+sim.matrix=rbind(clu_orig1,clu_orig2,clu_pca1,clu_pca2)
+par(mar=c(5,5,5,5))
+library(RColorBrewer)
+heatmap(sim.matrix, Rowv = NA, Colv = NA, scale = "column", 
+        main = "",col=colorRampPalette(brewer.pal(8, "Blues"))(25),cexRow=1,
+        labRow=c('Original, 1 SE','Original, 2 SE','PCA, 1 SE', 'PCA, 2 SE'))
+
+library(knitr)
+library(kableExtra)
+table(clu_orig1,clu_pca1) %>%
+  kable("html", caption = 'SE.factor=1', row.names = T) %>%
+    kable_styling(full_width = F, position = "float_left")
+ 
+table(clu_orig2,clu_pca2) %>%
+  kable("html", caption = 'SE.factor=2', row.names = T) %>%
+    kable_styling(full_width = F, position = "center")
+```
+
+I generated 100 more datasets according to the specifications for the Artificial Data Set 1, and I run again the clusGap with different pairs of parameters. As you can see, in this case using a SE factor = 1 leads to a greater number of clusters (typically 8 or more); on the other hand, optimality criteria with SE factor = 2 appeared to be more conservative.
+
+***
+ㅤ
+
+
+
+## **Exercise 5**
+> *A political scientist wants to cluster the respondents of a questionnaire using a distance-based method. The questionnaire has preference questions with two response options of the type "I prefer the current situation" is coded 0 and the option that suggests something else is coded 1. Would you prefer the simple matching distance or the Jaccard distance here? Why?*
+
+- If the *"something else"* response options were more or less specific in indicating an alternative view for each question, I would prefer the simple matching distance because it is a better measure in the case of symmetric dummy variables. SMD counts both mutual presences and mutual absence as matches, that is agreement in general, and compares it to the total number of attributes in the universe; it also opens to the possibility of splitting the *"something else"* responses into additional levels, in order to measure dissimilarity in a more precise way.
+On the other hand, if responses were quite generic, joint absences (preference for something else) could not be correctly read as indicators of similarity. In this case Jaccard distance may represent the most appropriate choice because it only counts mutual presence (preference for the current situation).   
+
+ㅤ
+
+
+
+> *Geographers want to cluster areas in the Swiss alps according to danger from avalanches in order to produce a map. Their variables are, all for the year 2019: (i) the number of avalanches in the area, (ii) the average percentage of the area covered by an avalanche, (iii) number of persons injured or dead in incidents involving avalanches in the area,(iv) Swiss Francs investment in the security of the ski slopes in the area, (v) Swiss Francs budget for emergency rescue in the area. Would you prefer the Euclidean distance on raw data, the Euclidean distance on scaled data, the Manhattan distance on raw data, the Manhattan distance on scaled data, or the Mahalanobis distance for these data? Why?*
+
+- First, input variables at disposal have all different scale or type (percentages, discrete numeric variables and continuous ones). Researchers should either use a scale-invariant clustering algorithm or a scale invariant distance, otherwise calculations will be influenced by features showing larger differences. Mahalanobis metric is the only scale-invariant candidate we have here, and practically it downweights  distances in a way that is proportional to the estimated variances of the corresponding features. So Mahalanobis is surely suited in this case. The euclidean metric applied to scaled data also leads to similar results (they differ by a rotation of axes performed by Mahalanobis), and this represents the most popular strategy in clustering problems. In general, scaling data before the analysis allows using any metric without caring about this issue. This means that researchers could even use the Manhattan distance (on scaled data) whenever they find reasons to do that, like in the case of high-dimensional samples.   
+
+***
+ㅤ
+
+
