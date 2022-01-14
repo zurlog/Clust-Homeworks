@@ -1,0 +1,282 @@
+---
+title: "Exercises 5-4"
+author: "Giovanni Zurlo"
+date: "15/11/2021"
+output: html_document
+---
+
+## **Exercise 1**
+
+> *On Virtuale you'll find the data set wdbc.data. This data set is taken from the UCI Machine Learning Repository.
+Data are given about 569 breast cancer patients, and there are the two "true" classes of benign (357 cases) and malignant (212 cases) tumors. There are ten quantitative features in the dataset.
+Compute different clusterings of the data (use at least two different approaches including a Gaussian mixture model and try out numbers of clusters up to 10) and compare them first without using the information about benign vs. malign cancers in the diagnosis variable wdbcdiag. Which clustering do you think is best?
+Only after you have made a decision about your favourite clustering, use the ARI to compare all these clusterings to wdbcdiag.
+Discuss how it was possible, without using wdbcdiag, to recognise from the data whether a clustering would be similar or less similar to the "true" clustering in wdbcdiag.*
+
+```{r packages, message=FALSE, warning=FALSE, include=FALSE}
+library(mclust)
+library(cluster)
+library(mclust)
+library(smacof)
+library(factoextra)
+library(dbscan)
+library(knitr)
+library(ggdendro)
+library(fpc)
+library(kableExtra)
+```
+
+
+```{r intro, message=FALSE, warning=FALSE, cache=TRUE}
+# Loading Data
+wdbc <- read.csv("wdbc.dat",header=FALSE)
+# Selecting variables 3-12
+wdbcc <- wdbc[,3:12]
+# Scaling data
+swdbcc = scale(wdbcc) 
+# Coding true labels as integers
+wdbcdiag <- as.integer(as.factor(wdbc[,2]))
+
+# Computing Euclidean DistMat
+dist=dist(swdbcc)
+# Performing PCA for visualization
+pca<- prcomp(swdbcc)
+summary(pca)
+```
+ㅤ
+
+
+##### **K-Means**
+```{r silkmeans, echo=FALSE, fig.align='center', fig.height=4, fig.width=8, message=FALSE, warning=FALSE,cache=TRUE}
+cg1 <- clusGap(swdbcc,kmeans,10,B=100,d.power=2,spaceH0="scaledPCA",nstart=50)
+plot(cg1,main="ClusGap Plot for K-Means",xlab="Number of Clusters",ylab="Gap Statistic")
+abline(v=2,col="red",lty="dashed") # ASW = 0.395
+```
+
+```{r kmeans_out, echo=FALSE}
+kmeans.out=kmeans(swdbcc,centers=2,iter.max = 1000,nstart = 500)
+kmeans.f=as.factor(kmeans.out$cluster)
+table(kmeans.f) |>
+  kable("html", caption = 'K-Means (2)', col.names = c("Cluster", "Freq")) |>
+    kable_styling(full_width = F, position = "center")
+```
+
+*K = 2* solution was preferred over a higher number of clusters also according to the ASW distribution (Max ASW for K-Means (2) = **0.395**)
+
+
+ㅤ
+
+##### **Ward Method**
+```{r wardgap, echo=FALSE, fig.align='center', fig.height=3, fig.width=7, message=FALSE, warning=FALSE, cache=TRUE}
+library(factoextra)
+set.seed(1234)
+# Computing the Gap Statistic for each Ward partition up to k = 10
+fviz_nbclust(swdbcc, FUNcluster = hcut, k.max = 10, hc_method = "ward.D2",
+ method = "gap_stat", maxSE = list(method = "globalSEmax", SE.factor = 2))
+```
+
+```{r ward_out, echo=FALSE, cache=TRUE}
+ward <- hclust(dist,method="ward.D2")
+ward.out = cutree(ward,2)
+ward.f=as.factor(ward.out)
+table(ward.f) |>
+  kable("html", caption = 'Ward Method (2)', col.names = c("Cluster", "Freq")) |>
+    kable_styling(full_width = F, position = "center")
+```
+
+
+ㅤ
+
+##### **PAM**
+```{r pamsil, echo=FALSE, fig.align='center', fig.height=4, fig.width=8, message=FALSE, warning=FALSE, paged.print=FALSE,cache=T}
+pasw <- NA
+pclusk <- list()
+psil <- list()
+set.seed(1234)
+for (k in 2:10){
+  pclusk[[k]] <- pam(dist,k, nstart = 100)
+  # Computation of silhouettes:
+  psil[[k]] <- silhouette(pclusk[[k]],dist=dist)
+  # ASW needs to be extracted:
+  pasw[k] <- summary(psil[[k]])$avg.width
+}
+
+
+plot(1:10,pasw,type="b",ylab="ASW",
+     xlab=paste("Number of clusters   -   Max ASW =",as.character(round(max(pasw[-1]),3))))
+m=match(max(pasw[-1]),pasw[-1])+1
+
+abline(v=m,col="red",lty="dashed") #ASW = 0.383
+```
+
+```{r pam_out, echo=FALSE, cache=TRUE}
+pam.f=as.factor(pclusk[[m]]$cluster)
+table(pam.f) |>
+  kable("html", caption = 'PAM (2)', col.names = c("Cluster", "Freq")) |>
+    kable_styling(full_width = F, position = "center")
+```
+
+```{r pca_compare1, echo=FALSE, fig.align='center', fig.height=4, fig.width=10}
+par(mfrow=c(1,3))
+plot(x=pca$x[,1],y=pca$x[,2], cex=1.5, lwd=1.8,
+     col=kmeans.f, pch=1, xlab="",ylab="PC2", main="K-Means (2)")
+plot(x=pca$x[,1],y=pca$x[,2], cex=1.5, lwd=1.8,
+     col=ward.f, pch=1, xlab="PC1", ylab="" , main="Ward (2)")
+plot(x=pca$x[,1],y=pca$x[,2], cex=1.5, lwd=1.8,
+     col=pam.f, pch=1, xlab="",ylab="" , main="PAM (2)")
+par(mfrow=c(1,1))
+```
+
+Solutions have been reported on a 2D PCA plot summarizing about 80% of the original data variability. Cluster 1, in *coral*, can be recognized as a density cluster whose correct identification will lead to better correspondence with the true classes.  Graphically, Ward clustering seems to lack a bit in isolating it while PAM and K-Means solutions are pretty similar and convincing.
+ㅤ
+
+##### **Mixture Models**
+```{r mixture fit, fig.align='center', fig.height=4.5, fig.width=8, message=FALSE, warning=FALSE, cache=TRUE}
+# Fitting different Gaussian Mixtures up to 10 components
+mixtures=Mclust(swdbcc, G=1:10) 
+summary(mixtures)
+
+# Storing the selected best models
+VVV=Mclust(swdbcc, G=2, 'VVV')
+VEV=Mclust(swdbcc, G=2, 'VEV')
+EVV=Mclust(swdbcc, G=2, 'EVV')
+
+# Plotting BIC for each fitted model
+library(factoextra)
+fviz_mclust_bic(mixtures, model.names = NULL, shape = 1, lwd=3,
+                color = "model", palette = NULL, legend = NULL,cex=2,
+                main = "Mixture Model Selection", xlab = "Number of Components",
+                ylab = "BIC")
+```
+
+ㅤ
+
+```{r mixselect, echo=FALSE, fig.align='center', fig.height=4, message=FALSE, warning=FALSE, cache=TRUE}
+selected_mix=Mclust(swdbcc, G=1:10,
+                    modelNames = c('VVV','VEV','EVV'))
+
+library(factoextra)
+fviz_mclust_bic(selected_mix, model.names = NULL, shape = 1, lwd=3,
+                color = "model", palette = NULL, legend = NULL,cex=2,
+                main = "Model Selection (Podium)", xlab = "Number of components",
+                ylab = "BIC") ### TOPTOP
+```
+
+Two clusters solutions were preferred over *K = 5* to which higher BIC values correspond. ASW index also suggests this choice but because of a well known bias it has. 
+EVV covariance matrix mixture includes in the coral cluster some more observations from the lower part of the plot but it is also worse in isolating the density cluster we have (it assumes equal volume).
+VVV and VEV models are hard to distinguish graphically (remember we're exploiting a PC approximation of the original sample) and also analytically they're very similar (*ARI = 0.9*).
+I think that these two are the best together with PAM and K-Means, but I cannot decide which is the most appropriate volume/shape for the coral cluster. ㅤ
+
+
+```{r pca_compare2, echo=FALSE, fig.align='center', fig.height=4, fig.width=10, cache=TRUE}
+par(mfrow=c(1,3))
+plot(x=pca$x[,1],y=pca$x[,2], cex=1.5, lwd=1.8,
+     col=VVV$classification, pch=1, xlab="",ylab="PC2", main="VVV (2)")
+plot(x=pca$x[,1],y=pca$x[,2], cex=1.5, lwd=1.8,
+     col=VEV$classification, pch=1, xlab="PC1", ylab="" , main="VEV (2)")
+plot(x=pca$x[,1],y=pca$x[,2], cex=1.5, lwd=1.8,
+     col=EVV$classification, pch=1, xlab="",ylab="" , main="EVV (2)")
+par(mfrow=c(1,1))
+```
+```{r}
+adjustedRandIndex(VVV$classification,VEV$classification)
+```
+
+
+
+ㅤ
+
+##### **Comparison with True Classes**
+```{r echo=FALSE, fig.height=5, fig.width=5,fig.align='center'}
+newcode=ifelse(wdbcdiag==2,1,2)
+plot(x=pca$x[,1],y=pca$x[,2], cex=1.2, lwd=1.9,
+     col=newcode, pch=1, xlab="PC1",ylab="PC2" , main="")
+legend(x=-9.60,y=-4.75, col=c('black','coral'), pch=1, legend=c("Benign", "Malignant"), cex=1.1)
+```
+```{r ARItab, echo=FALSE}
+ARI<- matrix(0, nrow = 1, ncol = 6)
+colnames(ARI)=c("K-Means (2)","Ward (2)", "PAM (2)","VVV (2)","VEV (2)","EVV (2)")
+rownames(ARI)=c("ARI")
+
+ARI[1,1]=adjustedRandIndex(kmeans.f,wdbcdiag)
+ARI[1,2]= adjustedRandIndex(ward.f,wdbcdiag) # with k=4 is 0.463
+ARI[1,3]= adjustedRandIndex(pam.f,wdbcdiag) 
+ARI[1,4]= adjustedRandIndex(VVV$classification,wdbcdiag) 
+ARI[1,5]= adjustedRandIndex(VEV$classification,wdbcdiag) 
+ARI[1,6]= adjustedRandIndex(EVV$classification,wdbcdiag) 
+
+library(kableExtra)
+ARI |>
+  kable("html", caption = 'Clustering Similarity to Diagnosis Variable', row.names = T) |>
+  kable_styling(full_width = T, position = "center")
+
+ASW=matrix(c(0.395,0.333, 0.383, 0.336,0.346,0.347),nrow = 1, ncol = 6)
+colnames(ASW)=c("K-Means (2)","Ward (2)", "PAM (2)","VVV (2)","VEV (2)","EVV (2)")
+rownames(ASW)=c("ASW")
+library(kableExtra)
+ASW |>
+  kable("html", caption = 'Average Silhouette Width', row.names = T) |>
+  kable_styling(full_width = T, position = "center")
+```
+Finally, the classifications were compared to the actual labels by means of the ARI. PAM clustering matches best the diagnoses we observed by a consistent margin.
+It is followed by K-Means clustering (graphically *wider shaped*) and the mixtures are behind them. A fully parametric, gaussian approach seems not to be the optimal one, while maximum flexibility is at least required to match the lables.
+I mainly followed a visual validation focusing on the idea of a higher density cluster (on the right side of the PCA plot) in a heap of noise (benign cases); in reality the malignant cases cluster has rather a skewed normal shape. The choice of *K = 2* for the mixture models has been confirmed from the analysis of the Adjusted Rand Index which decreases a lot as we add more and more components. 
+ASW ranking seems to suggest which partitions perform better in terms of ARI, but this cannot be generalized and its usage may also be not recommended in this setting.
+
+I would say that these unsupervised techniques are not completely appropriate to perform classification, since these do not take into account true lables. Like in this situation, decent results can be obtained if clear structures are present in the feature space, but this is not always the case. Supervised learning methods like SVMs are way more favored in this kind of tasks. As I observed in the principal components plot for the PAM clustering, a separating hyperplane could have done a great job with less effort. 
+
+***
+ㅤ
+
+## **Exercise 3**
+
+> *On Moodle you can find the article "Regularized k-means clustering
+of high-dimensional data and its asymptotic consistency" by Wei Sun and Junhui
+Wang, EJS 6 (2012).*
+
+
+
+ㅤ
+
+
+##### **Explain and motivate in your own words how regularized k-means differs from k-means, and how regularized model-based clustering differs from model-based clustering.**
+In the regularized k-means algorithm, an adaptive group lasso penalty term is introduced in the classical objective function. Basically, we sum to the usual within-cluster distances a regularization term depending on p different lambda parameters (one for each dimension) which allows for a flexible variable selection. In this way, as for other regularized regression techniques, we balance model fitting and sparsity straight in the objective function optimization and we obtain some "shrinked" new centers.
+Fitting procedure does not change since we still adopt an iterative scheme to approximate the global minimum of the objective (sensitive to initialization). 
+This idea can also be extended to model-based techniques such as mixture models by regularizing the log-likelihood function in the same fashion, and then employing the EM algorithm. 
+
+
+
+ㅤ
+
+
+##### **The authors state that the X-variables should be "centralized". Why is this important? Do you think it would also be useful to standardize them to unit variance? Why, or why not, or under what circumstances?**
+
+I guess that lambda parameters and clustering results may depend on the different scale of both variables and centers. Since we have the L2 norm of each center in the penalty term, I expect larger dimensions to "dominate" over smaller ones, as the euclidean norm is not scale-invariant.
+Whenever variables do not share a common unit of measure and/or scale, I think it could be useful to standardize them first in order to take into account each variable's true relative importance. As an example, common regularized regression techinques are not scale invariant and standardization is highly recommended.
+
+
+
+ㅤ
+
+
+
+##### **As opposed to the use of the Lasso in regression, the tuning constant λ here cannot be chosen by optimizing a prediction error estimated by cross-validation. Why not? What do the authors propose instead to choose the λ? Do you think this could also be done involving the Rand or adjusted Rand index?**
+
+We cannot use cross-validation as we do not have "labels" at disposal and classification isn't our goal. The authors suggest employing bootstrap resampling to investigate cluster stability over different parameters choice; the key idea is that a good clustering algorithm (with optimal parameters'values) should produce clusterings that are the more similar from one sample to another.
+In the paper, instability of the regularized k-means clustering is measured by a generic expected distance between any two clustering assignments;  the authors define such distance as a measure of the probability of their disagreement, so that ARI could not be assimilated to such measure (it takes negative value). Rand Index, however, does range between zero and one and since simulations are performed holding K constant, RI could also be involved in such tuning process.
+
+
+
+ㅤ
+
+
+
+##### **What are advantages and good properties of the method according to the authors? Do you think this is convincing? Can you think of any potential disadvantages of the method?**
+
+According to the authors, this new clustering method overcomes some of k-means issues with high-dimensional data (where many dimensions may contain no information about the clustering structure, i.e. may be redundant) such as deteriorated performances and clusters interpretability.  Regularized k-means simultaneously performs cluster analysis and variables selection and has the advantage of cutting down the "curse of dimensionality" suffered by the classical algorithm; as an example, with diverging data dimension, this last shows the tendency of grouping together neighboring clusters.
+Assuming a pre-specified true number of clusters K, two important properties are proved: estimation consistency and selection consistency. Given a properly selected λ, the regularized algorithm assures the a.s. convergence of the estimated cluster centers to the true ones; by the property of selection consistency, the algorithm can eliminate the uninformative variables in the centers with probability tending to one.
+However, further investigation of these traits is required in the case of unknown K; in general, one disadvantage of this procedure is the difficulty of tuning K and λ simultaneously. This means that, in several settings, regularized k-means clustering can lead to results that are biased and sub-optimal with respect to those offered by the unpenalized algorithm, and so it should be employed with great care.
+
+
+
+
