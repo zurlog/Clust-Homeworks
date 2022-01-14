@@ -1,0 +1,327 @@
+---
+title: "Exercises 6"
+author: "Giovanni Zurlo"
+date: "21/11/2021"
+output: html_document
+---
+```{r packages, message=FALSE, warning=FALSE, include=FALSE}
+library(mclust)
+library(cluster)
+library(factoextra)
+library(clusterSim)
+library(knitr)
+library(ggdendro)
+library(fpc)
+library(kableExtra)
+```
+
+## **Exercise 1**
+> *Cluster the dataset stars5000.dat using Gaussian mixtures, t-mixtures, skew-normal mixtures, and skew-t mixtures, and decide which clustering you find most convincing, with reasons.
+Although methods with flexible covariance/shape matrices can in principle handle variables with very different variances, value ranges here are vastly different, and standardisation may help, maybe in a robust manner.*
+
+```{r load, message=FALSE, warning=FALSE, cache=TRUE}
+stars<- read.table("stars5000.dat", header=TRUE)
+load(file = "Environment3.RData")
+str(stars)
+
+# Robust Positional Standardization ((x-median)/mad)
+sstars=clusterSim::data.Normalization(stars,type="n2",normalization="column")
+```
+
+```{r bicgraphs, echo=FALSE, fig.align='center', fig.height=4, fig.width=10, message=FALSE, warning=FALSE, cache=TRUE}
+oma=c(3,3,3,3)
+plot(1:20,bicvals.nd,typ="l",xlab="Number of Mixture Components",ylab="BIC",lty=2,col='steelblue1', lwd=2)
+lines(1:20,bicvals.td,typ="l",col='firebrick1', lwd=2.3)
+lines(1:15,bicvals.sn,typ="l",col='royalblue4',lty=2, lwd=2)
+lines(1:15,bicvals.st,typ="l",col='tan2', lwd=2.3)
+legend(x=4,y=90000,c("Normal","t","Skew-Normal","Skew-t"),col=c('steelblue1','firebrick1','royalblue4','tan2'),
+       lty = c(2,1,2,1), cex=0.8, lwd=3)
+
+plot(5:20,bicvals.nd[-(1:4)],typ="l",xlab="Number of Mixture Components",ylab="BIC",lty=2,col='steelblue1', lwd=2)
+lines(5:20,bicvals.td[-(1:4)],typ="l",col='firebrick1', lwd=2.3)
+lines(5:15,bicvals.sn[-(1:4)],typ="l",col='royalblue4',lty=2, lwd=2)
+lines(5:15,bicvals.st[-(1:4)],typ="l",col='tan2', lwd=2.3)
+legend(x=16,y=57000,c("Normal","t","Skew-Normal","Skew-t"),col=c('steelblue1','firebrick1','royalblue4','tan2'),
+       lty = c(2,1,2,1), cex=0.8, lwd=3)
+```
+
+ㅤ
+
+
+
+
+```{r echo=FALSE}
+BestCompN=round(BestCompN,0)
+a=rbind(BestCompN,BestBICs)
+    rownames(a) = c("# of Components","BIC")
+    a |>
+  kable("html", caption = 'Suggested Optimal Mixtures', col.names = c("Gaussian", "t","Skew-Normal","Skew-t")) |>
+    kable_styling(full_width = F, position = "center")
+```
+ 
+ A robust normalization based on the median and MAD was applied to the data.
+ For each type of density, I fitted mixtures with up to 15 or 20 components; the best ones are reported in the table above. First, we can observe that mixtures of skewed distribution are able to fit data better with a lower number of components, but they're also more difficult to estimate: "spikes" in the BIC series indicate that constraints on the covariance matrices were introduced in order to obtain the convergence of the E-M Algorithm. The maximum number of allowed iterations was set to 5000 (5x the default value) since otherwise most skew-t and skew-normal models flagged a convergence error (*"1"*) in the output list.  
+It is important to recall that BIC is somehow unreliable when choosing between mixtures of different shapes, and it is biased towards a higher number of components due to overclustering of data. I then followed a visual validation.
+
+ㅤ
+
+
+
+##### **Skew-Normal Mixture (13) Clustering**
+```{r pairs2, echo=FALSE, fig.align='center', fig.width=10, cache=TRUE}
+pairs(sstars[,2:6], col=skew.norm[[13]]$clust, pch=clusym[skew.norm[[13]]$clust], cex=1,oma=c(2,2,2,2))
+a=t(table(skew.norm[[13]]$clust)) 
+rownames(a)=('Frequency')
+a |>
+  kable("html", caption = '') |>
+    kable_styling(full_width = T, position = "center")
+```
+ 
+
+ㅤ
+
+
+
+
+##### **t-Distribution Mixture (18) Clustering**
+
+```{r pairs1, echo=FALSE, fig.align='center', fig.width=10, cache=TRUE}
+pairs(sstars[,2:6], col=tdist[[18]]$clust, pch=clusym[tdist[[18]]$clust], cex=1,oma=c(2,2,2,2))
+a=t(table(tdist[[18]]$clust)) 
+rownames(a)=('Frequency')
+a |>
+  kable("html", caption = '') |>
+    kable_styling(full_width = T, position = "center")
+```
+ 
+
+ㅤ
+
+
+
+
+##### **Normal Mixture (18) Clustering**
+
+```{r pairs3, echo=FALSE, fig.align='center', fig.width=10, cache=TRUE}
+
+pairs(sstars[,2:6], col=ndist[[18]]$clust, pch=clusym[ndist[[18]]$clust], cex=1,oma=c(2,2,2,2))
+a=t(table(ndist[[18]]$clust)) 
+rownames(a)=('Frequency')
+a |>
+  kable("html", caption = '') |>
+    kable_styling(full_width = T, position = "center")
+```
+
+Skewed distributions mixtures proved to be much more flexible than their symmetric counterparts. As you can see from the first pairs plot (*casn* variable was excluded), extreme values fall in four different small clusters (**3-4-7-9**). On the other hand, with a 18 t-distributions mixture model, these are all categorized in a "noise cluster" (**1**) while overclustering occurs in the core group of points. I would avoid such clustering since it seems unable to differentiate among outliers in different dimensions.  
+The 18 Normals Mixture at least categorizes them in two clusters (**4** and **10**) and leads to the lowest observed BIC. I would personally prefer the Skew-Normal or a Skew-t Mixture Model since they seem more suited to this kind of data, despite higher BIC values and some fitting issues (to be solved maybe with alternative initialization techniques or more specific parameters constraints).  
+
+ ***
+ 
+
+ㅤ
+
+
+
+## **Exercise 2**
+> *In a situation with 10 variables and 4 mixture components, what is the
+number of free parameters for ...*
+
+##### **a *"VVV"* Gaussian MM assuming fully flexible covariance matrices**
+```{r}
+p = 10
+K = 4
+
+(K-1) + K*(p + p*(p+1)/2)
+```
+ 
+ㅤ
+
+
+##### **a *"VII"* Gaussian MM assuming spherical covariance matrices**
+```{r}
+# Only one free parameter in each spherical covariance matrix
+(K-1) + K*(p + 1)
+```
+ 
+ㅤ
+
+
+##### **an *"EEE"* Gaussian MM with flexible covariance matrix assumed equal**
+```{r}
+# Only one free flexible covariance matrix common to each mixture component
+(K-1) + K*p + p*(p+1)/2
+``` 
+ 
+ㅤ
+
+
+##### **a Fully Flexible Skew-Normal Mixture**
+```{r}
+# We only add the number of delta skewness parameters
+(K-1) + K*(p + p*(p+1)/2) + K*p
+``` 
+ 
+ㅤ
+
+
+##### **a Fully Flexible Mixture of Multivariate *t* Distributions**
+```{r}
+# We have 4 degrees of freedom parameters
+(K-1) + K*(p + p*(p+1)/2) + K
+``` 
+ 
+ㅤ
+
+
+##### **a Fully Flexible Mixture of Skewed *t* Distributions**
+```{r}
+# We add 4 10-dimensional skewness parameters vectors
+(K-1) + K*(p + p*(p+1)/2) + K*p + K
+``` 
+ 
+ㅤ
+
+
+##### **a Mixture of Skew-*t* distributions with equal skewness parameters, degrees of freedom and Σ-matrices**
+```{r}
+# Several constraints allow us to reduce the number of free parameters by 2/3
+((K-1) + K*p + p*(p+1)/2 + p + 1)
+``` 
+
+ ***
+ 
+
+ㅤ
+
+
+
+## **Exercise 3**
+> Consider the following density of a mixture of two one-dimensional uniform distributions: $$f_{\eta}(x) = \pi u_{[a_{1},b_{1}]}(x) + (1-\pi)u_{[a_{2},b_{2}]}(x)$$     where $$\eta = (\pi,a_{1},a_{2},b_{1},b_{2}),   ㅤㅤ0<\pi<1,ㅤㅤa_{1}<b_{1},ㅤㅤa_{2}<b_{2}$$ Prove that the parameters of this model are not identifiable by proposing parameter vectors η1 and η2 such that: $$f_{\eta 1}(x) = f_{\eta 2}(x)$$
+
+Given two parameter vectors: $$ \eta_{1} = (\pi_{1}=\frac{1}{3},\frac{1}{4},\frac{1}{2},\frac{1}{2},1)ㅤ ㅤ andㅤ ㅤ \eta_{2} = (\pi_{2}=\frac{2}{3},\frac{1}{4},\frac{3}{4},\frac{3}{4},1)$$
+
+It can be proven that, for all x: $$f_{\eta1}(x) = f_{\eta2(x)}$$
+
+$$\frac{1}{3} \cdot u_{[0.25,0.5]}(x) + (1-\frac{1}{3})  \cdot u_{[0.5,1]}(x) = \frac{2}{3} \cdot u_{[0.25,0.75]}(x) + (1-\frac{2}{3})  \cdot u_{[0.75,1]}(x)$$ 
+
+$$\frac{4}{3} \cdot 1(x\in[\frac{1}{4},\frac{1}{2}]) + \frac{4}{3} \cdot 1(x\in[\frac{1}{2},1])= \frac{4}{3} \cdot 1(x\in[\frac{1}{4},\frac{3}{4}])+ \frac{4}{3} \cdot 1(x\in[\frac{3}{4},1])$$
+
+
+ ***
+ 
+
+ㅤ
+
+
+
+## **Exercise 4**
+> *Implement the big data method explained above, and apply it to the stars5000 data from Exercise 1. Use ns = 1000, take the time for this method's execution. Also take the time for running Mclust on those data. Compare the running times and the results of the big data method and of standard Mclust (it would be a good result for the big data method if results are very similar, but the run time is much faster).*
+
+I wrote a function for fitting mixture models to large datasets:
+
+```{r function, message=FALSE, warning=FALSE, cache=TRUE}
+MclustBD <-function(x, ns = 2000, seed = 1234, showProgress = F, Summary = T,...){
+  # The ... arguments are passed on to the Mclust function
+  # Setting a seed is required for reproducibility
+  # Some default values are specified for seed and subset size
+  require(mclust)
+  start_time <- Sys.time()
+  set.seed(seed)
+  # Draw a random subset of ns observations
+  index <- sample(1:nrow(x), size=ns)
+  rsubs <- x[index,]
+  extsubs <- x[-index,]
+  # Fitting Mclust to the subset
+  fit=Mclust(rsubs,verbose = showProgress,...)
+  # Extending the fitted model to all observations
+  pred <- predict.Mclust(fit,extsubs)
+  end_time <- Sys.time()
+  # Printing Running Time & Summary
+  if(showProgress == T){
+  print(paste("Running Time: ", round(end_time - start_time,3)),quote = F)}
+  if(Summary == T){print(summary(fit))}
+  
+  # Returning a list with comprehensive results 
+  out <- list()
+  out$classification <- integer(nrow(x))
+  out$classification[index] <- fit$classification
+  out$classification[-index] <- pred$classification
+  out$probability <- matrix(nrow = nrow(x),ncol = fit$G)
+  out$probability[index,] <- fit$z
+  out$probability[-index,] <- pred$z
+  out$fit <- fit
+    return(out)}
+```
+
+
+ㅤ
+
+
+##### **Mclust on a random subset (*n = 1000*)**
+```{r optimal, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE}
+## Optimal model ####
+subs.fit=MclustBD(sstars,G=1:15,ns=1000, Summary = T)
+print(paste("Overall Predictions (Out-of-Sample = 4000):"),quote = F)
+t(table(subs.fit$classification))
+```
+
+
+ㅤ
+
+
+
+##### **Mclust on the entire dataset (*n = 5000*)**
+```{r optimal2, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE}
+## Optimal model ####
+full=Mclust(sstars, G=1:15)
+summary(full)
+```
+```{r ARI}
+# Computing ARI to compare the obtained clusterings
+adjustedRandIndex(subs.fit$classification,full$classification)
+```
+```{r kable, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE}
+library(knitr)
+library(kableExtra)
+table(subs.fit$classification,full$classification) %>%
+  kable("html", caption = 'Optimal Gaussian Mixture   -   Subset vs. Full', row.names = T) %>%
+  kable_styling(full_width = F, position = "center")
+```
+
+Results are quite different... Standard Mclust function selected a *'VVV'* mixture model with *K = 15* while the big data method missed some of them, identifying 7 components and returning much worse results. Things don't change significantly if we force both function to fit a specific covariance model. Let's now compare the computational effort (as measured by the elapsed time) when fitting a 15-components *'VVV'* model:
+
+```{r running1, echo=TRUE, message=FALSE, warning=FALSE, cache=TRUE}
+# I integrated a running time measure in the function above
+subs.fit15 <- MclustBD(sstars, G=15, modelNames="VVV", ns=1000, showProgress = T, Summary = F)
+```
+```{r running2, echo=TRUE, message=FALSE, warning=FALSE, cache=T}
+# Running time as difference between system time before & after the execution
+start_time <- Sys.time()
+full15 <- Mclust(sstars, G=15, modelNames="VVV", verbose = F)
+end_time <- Sys.time()
+print(paste("Running Time: ", round(end_time - start_time,3)), quote=F)
+```
+
+We can see how remarkable is the time saving, already with small samples. Let's now repeat the comparison by doubling the size of the random sample *(ns = 2000)*:
+
+```{r running3, echo=TRUE, message=FALSE, warning=FALSE, cache=TRUE}
+# I integrated a running time measure in the function above
+subs.fit15 <- MclustBD(sstars, G=15, modelNames="VVV", ns=2000, showProgress=T, Summary=F)
+```
+```{r running4, echo=TRUE, message=FALSE, warning=FALSE, cache=T}
+# Running time as difference between system time before & after the execution
+start_time <- Sys.time()
+full15 <- Mclust(sstars, G=15, modelNames="VVV", verbose = F)
+end_time <- Sys.time()
+print(paste("Running Time: ", round(end_time - start_time,3)), quote=F)
+
+# Computing ARI to compare the obtained clusterings
+adjustedRandIndex(subs.fit$classification,full$classification)
+```
+Using ns = 2000 does not win that much time while still leading to pretty different, and potentially worse, clustering results.
+
+ ***
+
+
+
+
