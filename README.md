@@ -3,25 +3,28 @@ Weekly Assignments on Clustering Methods and Related Tools.
 
 Topics:
 
-‣ K-Means
+* K-Means
+  * K-Means++
+  * Trimmed K-Means
 
-‣ Gap Statistic (Tibshirani et al. (2001))
+* Gap Statistic (*Tibshirani et al. (2001)*)
 
-‣ Dissimilarities
+* Dissimilarities
 
-‣ Multidimensional Scaling (MDS)
+* Multidimensional Scaling (*MDS*)
 
-‣ Clustering Similarity Measures
+* Clustering Similarity Measures
+  * Rand Index and Adjusted Rand Index
 
-‣ Hierarchical Clustering
+* Hierarchical Clustering
 
-‣ PAM
+* *PAM*
 
-‣ Average Silhouette Width 
+* Average Silhouette Width 
 
-‣ Covariance Matrix Mixture Models
+* Covariance Matrix Mixture Models
 
-‣ Mixtures of Skew and Heavy-Tailed Distributions
+* Mixtures of Skew and Heavy-Tailed Distributions
 
-‣ Latent Class Analysis
+* Latent Class Analysis
 
