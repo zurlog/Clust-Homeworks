@@ -1,0 +1,413 @@
+---
+title: "Exercises 7"
+author: "Giovanni Zurlo"
+date: "29/11/2021"
+output: html_document
+---
+
+```{r packages, message=FALSE, warning=FALSE, include=FALSE}
+library(mclust)
+library(cluster)
+library(factoextra)
+library(clusterSim)
+library(knitr)
+library(ggdendro)
+library(fpc)
+library(kableExtra)
+library(flexmix)
+library(poLCA)
+library(nomclust)
+library(smacof)
+load(file = "Environment5.RData")
+```
+
+> *Run the following clusterings and compare them using MDS plots based on the
+simple matching distance. Also compute ARIs for every pair of clusterings. Where you compare one clustering based on electioncomplete with 1311 observations and one clustering based on
+electionwithna with 1785 observations, only use the 1311 observations without missing values for the ARI computation.*
+
+```{r intro, message=FALSE, warning=FALSE, cache=TRUE}
+library(poLCA)
+data(election)
+
+election12 <- election[,1:12]
+electioncomplete <- election12[complete.cases(election12),] # 1311 obs.
+
+electionwithna <- election12 
+for (i in 1:12){
+  levels(electionwithna[,i]) <- c(levels(election12[,i]),"NA") 
+  electionwithna[is.na(election12[,i]),i] <- "NA"}
+
+sm.complete <- sm(electioncomplete)
+sm.withna <- sm(electionwithna)
+mds.complete <- mds(sm.complete,type = 'ratio')
+mds.withna <- mds(sm.withna,type = 'ratio')
+```
+
+ㅤ
+
+
+
+
+#### **[a]ㅤㅤpoLCA(3) on election12**
+```{r echo=FALSE}
+a$call
+a
+```
+
+ㅤ
+
+
+
+
+#### **[b]ㅤㅤpoLCA(3) on electionwithna**
+```{r b, echo=FALSE, fig.height=5.5, fig.width=11, message=FALSE, warning=FALSE, cache=TRUE,fig.align='center'}
+b$call
+b
+par(mfrow=c(1,2))
+plot(mds.complete$conf[,1],mds.complete$conf[,2],col=a$predclass,cex=0.95,pch=20,xlab="MDS Stress = 29.8%",ylab="",main="poLCA - Complete")
+plot(mds.withna$conf[,1],mds.withna$conf[,2],col=b$predclass,cex=0.95,pch=20,xlab="MDS Stress = 31%",ylab="",main="poLCA - WithNA")
+
+```
+
+ㅤ
+
+
+
+
+#### **[c]ㅤㅤflexmixedruns(3) on electioncomplete**
+```{r c, echo=FALSE, message=FALSE, warning=FALSE}
+summary(c$flexout[[3]])
+```
+
+ㅤ
+
+
+
+
+#### **[d]ㅤㅤflexmixedruns(3) on electionwithna**
+```{r d, echo=FALSE, fig.height=5.5, fig.width=11, message=FALSE, warning=FALSE, cache=TRUE}
+summary(d$flexout[[3]])
+par(mfrow=c(1,2))
+plot(mds.complete$conf[,1],mds.complete$conf[,2],
+     col=c$flexout[[3]]@cluster,cex=0.95,pch=20,
+     xlab="MDS Stress = 29.8%",ylab="",main="flexmixedruns - Complete")
+plot(mds.withna$conf[,1],mds.withna$conf[,2],
+     col=d$flexout[[3]]@cluster, cex=0.95,pch=20,
+     xlab="MDS Stress = 31%",ylab="",main="flexmixedruns - WithNA")
+```
+
+We have an exact correspondence between mixtures estimated by means of different functions, on the same dataset (same BIC values and ARI ≈ 1). The inclusion of 474 observations with missing values has a remarkable impact on clusterings, with ARI dropping to about 0.34.
+
+ㅤ
+
+
+
+
+
+#### **[e]ㅤㅤPAM (3) on electioncomplete**
+```{r PAM1, echo=FALSE, cache=TRUE}
+e$call
+e$clusinfo
+print(paste("Cluster Avg Silhouette Width: "), quote = F)
+round(e$silinfo$clus.avg.widths,3)
+print(paste("Average Silhouette Width: ",round(e$silinfo$avg.width,3)), quote = F)
+```
+
+
+ㅤ
+ㅤ
+
+#### **[f]ㅤㅤPAM (3) on electionwithna**
+```{r PAM2, echo=FALSE, cache=TRUE, fig.height=5.5, fig.width=11, message=FALSE, warning=FALSE, cache=TRUE,fig.align='center'}
+f.mod$call
+f.mod$clusinfo
+print(paste("Cluster Avg Silhouette Width: "), quote = F)
+round(f.mod$silinfo$clus.avg.widths,3)
+print(paste("Average Silhouette Width: ",round(f.mod$silinfo$avg.width,3)), quote = F)
+
+par(mfrow=c(1,2))
+plot(mds.complete$conf[,1],mds.complete$conf[,2],
+     col=e$clustering,cex=0.95,pch=20,
+     xlab="MDS Stress = 29.8%",ylab="",main="PAM - Complete")
+plot(mds.withna$conf[,1],mds.withna$conf[,2],
+     col=f.mod$clustering, cex=0.95,pch=20,
+     xlab="MDS Stress = 31%",ylab="",main="PAM - WithNA")
+```
+
+Surprisingly, the introduction of NAs as a new categorical value has no effect on PAM algorithm. This can be seen roughly from the plots, ignoring label switching, and from the ARI table below (*ARI[e,f] ≈ 1*) 
+
+ㅤ
+ㅤ
+
+#### **[g]ㅤㅤPAM (3) on Gower Dissimilarity Matrix**
+I was supposed to compute a dissimilarity-based clustering on Gower dissimilarity matrix (which allows for missing values by definition). However, I obtained a matrix containing several NAs, due to the fact that for some observations there was no information with which to compute the dissimilarity. I decided to discard vectors containing NAs from the matrix, while still preserving information about more observations (**1466**) than those kept in *electioncomplete* (**1311**). 
+Final clustering is, however, very dissimilar from all the others.
+```{r proof, message=FALSE, warning=FALSE, cache=TRUE}
+gower=daisy(election12,metric = 'gower')
+# Dissimilarity computed for all 1785 obs, with NAs 
+attributes(gower)$Size
+attributes(gower)$NA.message
+
+# Removing NAs from the Dissimilarity Matrix
+gower2 = as.matrix(gower)
+gower2 = gower2[rowSums(is.na(gower2)) == 0, colSums(is.na(gower2)) == 0, drop = FALSE]
+gower2 = as.dist(gower2)
+
+attributes(gower2)$NA.message
+attributes(gower2)$Size
+# Running PAM on this obtained Gower DissMat - Printing Summary
+```
+
+```{r g, echo=FALSE, fig.height=5, fig.width=6, message=FALSE, warning=FALSE, cache=TRUE,fig.align='center'}
+g$call
+g$clusinfo
+print(paste("Cluster Avg Silhouette Width: "), quote = F)
+round(g$silinfo$clus.avg.widths,3)
+print(paste("Average Silhouette Width: ",round(g$silinfo$avg.width,3)), quote = F)
+
+plot(mds.gow$conf[,1],mds.gow$conf[,2],
+     col=g$clustering,cex=1.3,pch=20,
+     xlab="MDS Stress = 29.8%",ylab="",main="PAM (3) - Gower DissMat Sample")
+```
+
+
+
+ㅤ
+ㅤ
+
+#### **[h]ㅤㅤflexmixedruns on electionwithna with estimated K**
+```{r h, echo=FALSE, fig.height=4, fig.width=10, message=FALSE, warning=FALSE, cache=TRUE, fig.align='center'}
+summary(h$flexout[[8]])
+
+plot(1:10,h$bicvals,typ="l",xlab="Number of clusters",ylab="BIC", main = 'Model Selection - BIC')
+h.c=h$flexout[[8]]@cluster[complete.cases(election12)]
+abline(v=8,col=2,lty=2)
+```
+```{r graph, echo=FALSE, fig.height=5.5, fig.width=7, message=FALSE, warning=FALSE, cache=TRUE,fig.align='center'}
+plot(mds.withna$conf[,1],mds.withna$conf[,2], 
+     col=h$flexout[[8]]@cluster, cex=1,pch=clusym[h$flexout[[8]]@cluster],
+     xlab="MDS Stress = 31%",ylab="",main="flexmixedruns (K = 8) - WithNA")
+```
+```{r}
+results=list()
+results[[1]]=a$predclass
+results[[2]]=b.c
+results[[3]]=c$flexout[[3]]@cluster
+results[[4]]=d.c
+results[[5]]=e$clustering
+results[[6]]=f.c
+results[[7]]=g.c
+results[[8]]=h.c
+
+labels=c('a','b','c','d','e','f','g','h')
+results=setNames(object=results,labels)
+
+ARI=matrix(NA,nrow = 8,ncol = 8, dimnames = list(labels,labels))
+
+for (i in 1:8) {
+  for (j in 1:8) {ARI[i,j]=adjustedRandIndex(results[[i]],results[[j]])}
+}
+
+library(kableExtra)
+ARI |>
+kable("html", caption = 'Clusterings Pairwise Comparisons (ARI)', row.names = T) |>
+  kable_styling(full_width = F, position = "center")
+```
+
+ ***
+ 
+
+ㅤ
+
+
+
+## **Exercise 2**
+> *For two different latent class clusterings computed in question 1 on the
+electionwithna-data produce heatmaps as on slide 276 of the course notes.
+Comment on the plots. Do you find the clusters convincing? Why or why not? Is there evidence against local independence?*
+ 
+
+ㅤ
+
+
+#### **ㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤHeatplot for PAM (3) on electionwithna**
+```{r h.heat, echo=FALSE, fig.height=6.5, fig.width=9, message=FALSE, warning=FALSE, cache=TRUE}
+library(RColorBrewer)
+  # col=colorRampPalette(brewer.pal(8, "Blues"))(25)
+heatmap(x=heatmap.df[order(f.mod$clustering),],
+        Rowv=NA,
+        Colv=as.dendrogram(varclust),
+        RowSideColors=palette()[f.mod$clustering][order(f.mod$clustering)],
+        col=c('lavenderblush3','darkorange4','darkorange2','olivedrab3','olivedrab4'),
+        scale="none") # scale column
+legend(x='right',cex=1,
+       legend =c("NA","Not well at all","Not too well","Quite well","Extremely well"),
+       fill =c('lavenderblush3','darkorange4','darkorange2','olivedrab3','olivedrab4') )
+
+
+```
+ 
+
+ㅤ
+
+
+
+First cluster (*N = 326*) collects those respondents having a good opinion of Al Gore: They answer mostly negatively about the virtues of the opponent and whenever Gore is sketched as a dishonest leader.
+The opposite happens for cluster 2 (*N = 498*), which groups Bush's supporters; in this case we observe less enthusiastic opinions due to a much lower rate of "Extremely well" responses.
+Respondents in the third cluster (*N = 970*) do not show a clear preference for one of the candidates while still considering them as quite honest. This is probably the cluster of undecided voters. Given these considerations, I find this result quite convincing with evidence in favour of the local independence assumption (clear homogeneous patterns in the first two clusters, random and non-informatives differences among the observations in the third one).   
+
+
+ㅤ
+
+
+
+#### **ㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤHeatplot for flexmixedruns (8) on electionwithna**
+```{r f.mod.heat, echo=FALSE, fig.height=6.5, fig.width=9, message=FALSE, warning=FALSE, cache=TRUE}
+library(RColorBrewer)
+  # col=colorRampPalette(brewer.pal(8, "Blues"))(25)
+heatmap(x=heatmap.df[order(h$flexout[[8]]@cluster),],
+        Rowv=NA,
+        Colv=as.dendrogram(varclust),
+        RowSideColors=palette()[h$flexout[[8]]@cluster][order(h$flexout[[8]]@cluster)],
+        col=c('lavenderblush3','darkorange4','darkorange2','olivedrab3','olivedrab4'),
+        scale="none") # scale column
+legend(x='right',cex=1,
+       legend =c("NA","Not well at all","Not too well","Quite well","Extremely well"),
+       fill =c('lavenderblush3','darkorange4','darkorange2','olivedrab3','olivedrab4') )
+
+
+```
+ 
+
+ㅤ
+
+
+
+This heatplot also shows some clear patters: Gore's potential voters (grey, magenta and green clusters), Bush supporters (cyan and coral clusters), non-respondents in blue cluster...
+We still find undecided voters groups. I also quite like this clustering since it shows a more detailed picture of the "electorate", by grouping people with different levels of preference. I find the local independence assumption to be somehow satisfied in this plot, but there could be some reveling structures in smaller clusters that I can't clearly see.  
+
+ ***
+ 
+
+ㅤ
+
+
+
+## **Exercise 3**
+> *Assume a situation with 10 categorical variables. Five variables are binary, three variables have three categories, and two variables have five categories. What is the number of free parameters for...*
+
+#### **a general categorical model that models all possible probabilities**
+```{r i}
+p <- 10
+# Creating a vector of lenght p with the number of categories mj
+mj <- c(rep(2,5),rep(3,3),rep(5,2))
+# Computing the number of free parameters
+prod(mj-1)
+```
+Since *n* vectors of dimension *p* can fit up to *np* df, here we would need at least **13** observations.
+
+ 
+
+ㅤ
+
+
+
+
+
+#### **a latent class mixture model with 4 mixture components**
+```{r ii}
+K <- 4
+# Computing the number of free parameters
+(K-1) + K*sum(mj-1)
+(K-1) + K*sum(mj-1) < prod(mj-1)
+```
+Smaller df (and required sample size) than a fully general categorical model.
+
+ 
+
+ㅤ
+
+
+
+
+> *Consider a situation where observations X = (X1;X2;X3) have 3 categorical variables, all binary with values 0 and 1. Consider a latent class mixture with three components (clusters), and the given parameters. Compute:*
+
+#### **the *dof* that this model has, and the *dof* of a general categorical model**
+```{r dof}
+mj <- rep(2,3)
+K <- 3
+# Computing dof of a general multinomial model
+prod(mj-1)
+# Computing dof of a latent class mixture with K=3
+(K-1) + K*sum(mj-1)
+```
+
+ 
+
+ㅤ
+
+
+
+
+
+#### **Probabilities for all possible observations**
+```{r probs, cache=TRUE}
+bin=c(0,1)
+# Generating all the possible observations
+obs=expand.grid(bin,bin,bin)
+
+# Computing and collecting the conditional probs. g(x|y=1)
+g_x.y1=numeric()
+g_x.y1[1]=(0.9)^3
+g_x.y1[2]=0.1*(0.9)^2
+g_x.y1[3]=0.1*(0.9)^2
+g_x.y1[4]=((0.1)^2)*0.9
+g_x.y1[5]=0.1*(0.9)^2
+g_x.y1[6]=((0.1)^2)*0.9
+g_x.y1[7]=((0.1)^2)*0.9
+g_x.y1[8]=(0.1)^3
+
+# Computing and collecting the conditional probs. g(x|y=2)
+g_x.y2=numeric()
+g_x.y2[1]=(0.5)^3
+g_x.y2[2]=(0.5)^3
+g_x.y2[3]=(0.5)^3
+g_x.y2[4]=(0.5)^3
+g_x.y2[5]=(0.5)^3
+g_x.y2[6]=(0.5)^3
+g_x.y2[7]=(0.5)^3
+g_x.y2[8]=(0.5)^3
+
+# Computing and collecting the conditional probs. g(x|y=3)
+g_x.y3=numeric()
+g_x.y3[1]=(0.2)^3
+g_x.y3[2]=0.8*(0.2)^2
+g_x.y3[3]=0.8*(0.2)^2
+g_x.y3[4]=((0.8)^2)*0.2
+g_x.y3[5]=0.8*(0.2)^2
+g_x.y3[6]=((0.8)^2)*0.2
+g_x.y3[7]=((0.8)^2)*0.2
+g_x.y3[8]=(0.8)^3
+
+# Computing marginal probabilities
+f_x=(g_x.y1/3 + g_x.y2/3 + g_x.y3/3)
+```
+```{r table, echo=FALSE}
+probs=round(cbind(obs,g_x.y1,g_x.y2,g_x.y3,f_x),4)
+colnames(probs)=c("X1","X2","X3","g(x|y=1)","g(x|y=2)","g(x|y=3)","f(x)")
+
+library(kableExtra)
+probs |>
+  kable("html", caption = 'Conditional and Marginal Probabilites', row.names = F) |>
+  kable_styling(full_width = F, position = "center")
+```
+
+ ***
+ 
+
+ㅤ
+
+
+
+
+
