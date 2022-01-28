@@ -7,6 +7,9 @@ library(fpc)
 library(factoextra)
 library(cluster)
 library(smacof)
+library(mclust)
+library(fda)
+library(funFEM)
 #####
 
 set.seed(1234)
@@ -125,6 +128,7 @@ for (k in 2:30){
 
 plot(1:30,pasw,type="l",xlab="Number of clusters",ylab="ASW Plot")
 plot(psil[[5]])
+mlr3viz::autoplot(preds, task, type = "sil")
 #####
 
 ## VISUALIZATION ####
@@ -134,6 +138,8 @@ princomp(x)
 plot(x=pca$scores[,1], y=pca$scores[,2], 
      col = ($cluster+1), pch=($cluster+1),
      cex=1.1, xlab="PC1 (44.3%)", ylab = "PC2 (27.8%)", main = "PC1 / PC2 - plot")
+
+mlr3viz::autoplot(preds, task, type = "pca", frame = TRUE)
 
 clusym[]; clucols(mod$cluster)
 
@@ -259,6 +265,103 @@ poLCA::poLCA(f, x, nclass=3, maxiter = 5000, nrep = 70)
 a$predclass # Clustering
 a$bic
 #####
+
+## FUNCTIONAL DATA ####
+
+# Raw data plot:
+plot(1:ncol(x),x[1,],type="l",ylab="",xlab="",main="", ylim = c(min(x),max(x)))
+for(i in 2:nrow(x)){
+  points(1:ncol(x),x[i,],type="l")
+  }
+
+# Constructing B-spline basis
+bbasis <- create.bspline.basis(c(1,ncol(x)),nbasis=10) # with p=10, d=4
+# Splines approximating data as linear combinations of B-spline basis
+fd10 <- Data2fd(1:ncol(x),y=t(as.matrix(x)),basisobj=bbasis)
+
+# Plot basis
+plot(bbasis)
+
+# Smooth splines for data with smooth mean function:
+plot(fd10)
+meanx <- mean.fd(fd10)
+lines(meanx,col=2,lwd=5)
+# Show smooth fit of individual countries
+plotfit.fd(t(x),1:ncol(x),fd10,index=79,cex.pch=0.5)
+
+
+## FUNCTIONAL PCA
+fpca <- pca.fd(fd10, nharm = 5)
+plot(fpca$harmonics) # PCs phi_k
+fpca$varprop # Percentage of variance
+cumsum(fpca$varprop) # Cumulative percentage of variance
+
+plot.pca.fd(fpca, expand = 0)
+pairs(fpca$scores,col=clust,pch=clusym[clust])
+
+# Create functional data object of PCA approximations
+pcaapprox <- fpca$harmonics
+i <- 1
+pcacoefi <- fpca$harmonics$coefs %*% fpca$scores[i,]+fd10$coefs
+covidpcaapprox$coefs <- pcacoefi
+for (i in 2:179){
+  pcacoefi <- fpca$harmonics$coefs %*% fpca$scores[i,]+mcovid$coefs
+  pcaapprox$coefs <- cbind(pcaapprox$coefs, pcacoefi)
+}
+dimnames(pcaapprox$coefs)[[2]] <- covid21[,1]
+plotfit.fd(t(x),1:555,pcaapprox,index=79,cex.pch=0.5)
+
+
+## funFEM
+set.seed(1234567)
+femmodels <- c("DkBk", "DkB", "DBk","DB", "AkjBk",
+               "AkjB", "AkBk", "AkBk", "AjBk", "AjB", "ABk","AB")
+nmodels <- length(femmodels)
+femresults <- list() # Save output for all models in femmodels
+bestk <- bestbic <- numeric(0)
+# bestk: vector of best K for each model.
+# bestbic: Best BIC value for each model.
+K=2:10 # Numbers of clusters K to try out.
+fembic <- matrix(NA,nrow=nmodels,ncol=max(K))
+# fembic will hold all BIC values for models (rows) and K (columns);
+# NA for those that cannot be fitted.
+for (i in 1:nmodels){ # This takes a long time!!
+  print(femmodels[i])
+  femresults[[i]] <- funFEM(fd10,model=femmodels[i],K=K)
+  fembic[i,K] <- femresults[[i]]$allCriterions$bic
+  bestk[i] <- which(fembic[i,]==max(fembic[i,K],na.rm=TRUE))
+  bestbic[i] <- max(fembic[i,K],na.rm=TRUE)
+}
+besti <- which(bestbic==max(bestbic,na.rm=TRUE))
+
+# This prints out the countries in the clusters.
+for(i in 1:femresult11$K){
+  print(i)
+  print(covid21[femresult11$cls==i,1])
+}
+pairs(fpca$scores,col=femresult11$cls,pch=19)
+
+#Visualisation of discriminative subspace U
+fdproj <- t(fdcovid$coefs) %*% femresult11$U
+pairs(fdproj,col=femresults11$cls,pch=19)
+plot(fdproj,col=femresult11$cls,pch=19,xlab="DC 1",ylab="DC 2")
+
+# Plot the cluster mean curves
+clmeans <- fd10; clmeans$coefs <- t(femcovid$prms$my)
+plot(clmeans,lwd=3) # col doesn't seem to work here, neither lwd
+legend(100,10,legend=1:8,col=c(1:6,1:2),lty=c(1:5,1:3))
+# Plot individual clusters and mean curves
+par(ask=TRUE)
+for (k in 1:femcovid$K){
+  plot(1:ncol(x),x[1,],type="l", ylim=c(0,25),ylab="")
+       for(i in 2:179){
+  points(1:ncol(x),x[i,],type="l",col=as.integer(femcovid$cls[i]==k))
+    meank <- colMeans(x[femcovid$cls==k,])
+    points(1:ncol(x),meank,type="l",lwd=5,col=2)}
+}
+par(ask=FALSE)
+#####
+
 
 ## ROBUST STATISTICS ####
 
